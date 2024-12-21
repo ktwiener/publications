@@ -1,10 +1,13 @@
 
+rfiles <- "snt_emulation/R/"
+source(paste0(rfiles, "update_pop.R"))
 ## Same for all scenarios
-weeks <- 8 # for follow-up, three weeks for contributing indices
+weeks <- 5 # for follow-up, three weeks for contributing indices
+index_weeks <- 3
 popsize <- 5000
 sims <- 100
-out_by_sev_trt0 <- c(0.05, 0.1)
-trt_by_sev <- c(0.2, 0.6) # If these are the same, no confounding
+out_by_sev_trt0 <- c(0.1, 0.1)
+trt_by_sev <- c(0.2, 0.2) # If these are the same, no confounding
 
 ## Changes by scenario
 enc_by_sev_nomod <- c(0.4, 0.4)
@@ -13,14 +16,11 @@ enc_by_sev_mod <- c(0.4, 0.2)
 homg_effect <- 1
 hetg_effect <- c(0.7, 0.3)
 
-out_by_sev_trt1 = out_by_sev_trt0*homg_effect # Testing with no treatment effect
-
-source(paste0(rfiles, "setup.R"))
-source(paste0(rfiles, "update_pop.R"))
-
 fup <- make_trajectories(trt_by_sev,
+                         enc_by_sev = c(1, 1),
                          out_by_sev_trt0,
-                         out_by_sev_trt0, weeks = weeks)
+                         out_by_sev_trt0, weeks = weeks, index_weeks = index_weeks)
+
 long_pop1 <- convert_to_long(fup, weeks = weeks)
 long_pop <- long_pop1 |> convert_long_to_longer(fup, trt_enc_sev = trt_by_sev, weeks = weeks)
 

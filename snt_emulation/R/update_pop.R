@@ -1,20 +1,24 @@
 
 ## Make generic frame of information needed at each visit.
-make_trajectories <- function(trt_by_sev,
-                              out_by_sev_trt0,
-                              out_by_sev_trt1,
-                              sev_prob = 0.25,
-                              index_weeks = 3,
-                              weeks = 5){
+make_trajectories <- function(trt_by_sev, # Treatment probability by severity
+                              enc_by_sev, # Encounter probability by severity
+                              out_by_sev_trt0, # Outcome probability by severity for under no treatment
+                              out_by_sev_trt1, # Outcome probability by severity under treatment
+                              sev_prob = 0.25, # Probability of severity progression at each visit
+                              index_weeks = 3, # Number of visits that contribute indices
+                              weeks = 5){ # Full number of visits
 
-  fup_weeks <- weeks - index_weeks
+  fup_weeks <- weeks - index_weeks # Number of visits after indices are contributed
 
   ## All possible combinations of severity, treatment, and outcome
   dplyr::tibble(sev = 0:1) |>
-    cross_join(
+    dplyr::cross_join(
+      dplyr::tibble(enc = 0:1)
+    ) |>
+    dplyr::cross_join(
       dplyr::tibble(trt = 0:1)
     ) |>
-    cross_join(
+    dplyr::cross_join(
       dplyr::tibble(y = 0:1)
     ) |>
     dplyr::mutate(
@@ -22,6 +26,8 @@ make_trajectories <- function(trt_by_sev,
       psev = sev*sev_prob + (1-sev)*(1-sev_prob),
       ## Probability of observed treatment
       ptrt = trt*trt_by_sev[sev + 1] + (1-trt)*(1-trt_by_sev[sev + 1]),
+      ## Probability of observed encounter
+      penc = enc*enc_by_sev[sev + 1] + (1-enc)*(1-enc_by_sev[sev+1]),
       ## Probability of observed outcome
       py = y*(trt*out_by_sev_trt1[sev + 1] + (1-trt)*out_by_sev_trt0[sev + 1]) + # Prob of outcome based on trt
         (1-y)*(trt*(1-out_by_sev_trt1[sev + 1]) + (1-trt)*(1-out_by_sev_trt0[sev + 1])) # Prob of no outcome based on trt & sev
@@ -30,6 +36,8 @@ make_trajectories <- function(trt_by_sev,
   ## Make initial week of indices
   week1 <- frame |>
     set_names(paste0(names(frame), 1)) |>
+    dplyr::mutate(enc1 = 1, penc1 = 1) |>
+    dplyr::distinct() |>
     dplyr::mutate(prob = ptrt1*py1*psev1) # Prob of pattern is P(S)xP(T|S)xP(Y|S,T)
 
 
@@ -38,12 +46,13 @@ make_trajectories <- function(trt_by_sev,
     .init = week1,
     .f = function(prior, week){ # Takes in prior week and adds new week
       frame |>
+        dplyr::mutate(trt = enc*trt) |>
         dplyr::cross_join(prior |> dplyr::filter(!!sym(paste0("y", week-1)) == 0)) |> # Limit prior week to where outcomes didn't happen
         dplyr::filter(!!sym(paste0("trt", week-1)) <= trt, # Filter to make sure treatment severity monotically increasing
                       !!sym(paste0("sev", week-1)) <= sev) |>
         dplyr::mutate(
           # Prior prob x prob of treatment = max of prior treatment or being treated x prob of outcome x max of being severe or already severe
-          prob = prob*pmax(ptrt, !!sym(paste0("trt", week-1)))*py*pmax(psev, !!sym(paste0("sev", week-1)))
+          prob = prob*pmax(ptrt*penc, !!sym(paste0("trt", week-1)))*py*pmax(psev, !!sym(paste0("sev", week-1)))
         ) %>%
         dplyr::rename_with(
           .fn = ~ sub("([a-z]+)$", paste0("\\1", week), .x), # Add '2' to the end of matching columns
@@ -55,7 +64,7 @@ make_trajectories <- function(trt_by_sev,
   ## Frame of probabilities for visits contributed after final index
   post_trt_frame <- frame |>
     dplyr::distinct(sev, psev, trt, y, py) |>
-    dplyr::mutate(ptrt = 1) # Treatment doesn't change
+    dplyr::mutate(penc = 1, enc = 1, ptrt = 1) # Treatment doesn't change
 
   if (fup_weeks > 0) {
     post_trt_indices <- purrr::accumulate(
