@@ -4,8 +4,12 @@ make_trajectories <- function(trt_by_sev,
                               out_by_sev_trt0,
                               out_by_sev_trt1,
                               sev_prob = 0.25,
+                              index_weeks = 3,
                               weeks = 5){
 
+  fup_weeks <- weeks - index_weeks
+
+  ## All possible combinations of severity, treatment, and outcome
   dplyr::tibble(sev = 0:1) |>
     cross_join(
       dplyr::tibble(trt = 0:1)
@@ -14,23 +18,25 @@ make_trajectories <- function(trt_by_sev,
       dplyr::tibble(y = 0:1)
     ) |>
     dplyr::mutate(
+      # Prob of observed severity
+      psev = sev*sev_prob + (1-sev)*(1-sev_prob),
+      ## Probability of observed treatment
       ptrt = trt*trt_by_sev[sev + 1] + (1-trt)*(1-trt_by_sev[sev + 1]),
-      py = y*(trt*out_by_sev_trt1[sev + 1] + (1-trt)*out_by_sev_trt0[sev + 1]) +
-        (1-y)*(trt*(1-out_by_sev_trt1[sev + 1]) + (1-trt)*(1-out_by_sev_trt0[sev + 1])),
-      psev = sev*sev_prob + (1-sev)*(1-sev_prob)
+      ## Probability of observed outcome
+      py = y*(trt*out_by_sev_trt1[sev + 1] + (1-trt)*out_by_sev_trt0[sev + 1]) + # Prob of outcome based on trt
+        (1-y)*(trt*(1-out_by_sev_trt1[sev + 1]) + (1-trt)*(1-out_by_sev_trt0[sev + 1])) # Prob of no outcome based on trt & sev
     ) -> frame
 
   ## Make initial week of indices
   week1 <- frame |>
     set_names(paste0(names(frame), 1)) |>
-    dplyr::mutate(prob = ptrt1*py1*psev1)
+    dplyr::mutate(prob = ptrt1*py1*psev1) # Prob of pattern is P(S)xP(T|S)xP(Y|S,T)
 
 
   trt_indices <- purrr::accumulate(
-    2:3,
+    2:index_weeks,
     .init = week1,
     .f = function(prior, week){ # Takes in prior week and adds new week
-
       frame |>
         dplyr::cross_join(prior |> dplyr::filter(!!sym(paste0("y", week-1)) == 0)) |> # Limit prior week to where outcomes didn't happen
         dplyr::filter(!!sym(paste0("trt", week-1)) <= trt, # Filter to make sure treatment severity monotically increasing
@@ -41,7 +47,7 @@ make_trajectories <- function(trt_by_sev,
         ) %>%
         dplyr::rename_with(
           .fn = ~ sub("([a-z]+)$", paste0("\\1", week), .x), # Add '2' to the end of matching columns
-          .cols = sev:psev                     # Specify the range of columns to rename
+          .cols = sev:py                     # Specify the range of columns to rename
         )
     }
   )
@@ -51,32 +57,38 @@ make_trajectories <- function(trt_by_sev,
     dplyr::distinct(sev, psev, trt, y, py) |>
     dplyr::mutate(ptrt = 1) # Treatment doesn't change
 
-  post_trt_indices <- purrr::accumulate(
-    4:weeks,
-    .init = trt_indices[[3]],
-    function(prior, week){
-      post_trt_frame |>
-        dplyr::cross_join(prior |> dplyr::filter(!!sym(paste0("y", week-1)) == 0)) |>
-        dplyr::filter(!!sym(paste0("trt", week-1)) == trt, ## treatment doesn't change
-                      !!sym(paste0("sev", week-1)) <= sev) |>
-        dplyr::mutate(prob = prob*py*pmax(psev, !!sym(paste0("sev", week-1)))) |>
-        dplyr::rename_with(
-          .fn = ~ sub("([a-z]+)$", paste0("\\1", week), .x), # Add '2' to the end of matching columns
-          .cols = sev:ptrt                     # Specify the range of columns to rename
-        )
-    }
-  )
+  if (fup_weeks > 0) {
+    post_trt_indices <- purrr::accumulate(
+      (index_weeks + 1):weeks,
+      .init = trt_indices[[index_weeks]],
+      function(prior, week){
+        post_trt_frame |>
+          dplyr::cross_join(prior |> dplyr::filter(!!sym(paste0("y", week-1)) == 0)) |>
+          dplyr::filter(!!sym(paste0("trt", week-1)) == trt, ## treatment doesn't change
+                        !!sym(paste0("sev", week-1)) <= sev) |>
+          dplyr::mutate(prob = prob*py*pmax(psev, !!sym(paste0("sev", week-1)))) |>
+          dplyr::rename_with(
+            .fn = ~ sub("([a-z]+)$", paste0("\\1", week), .x), # Add '2' to the end of matching columns
+            .cols = sev:ptrt                     # Specify the range of columns to rename
+          )
+      }
+    )
+
+    all_indices <- c(trt_indices, post_trt_indices[-1])
+  } else {all_indices <- trt_indices}
+
+
 
   ## Final accumulation
   fup <- purrr::imap_dfr(
-    c(trt_indices, post_trt_indices[-1]), ## Don't need to repeat week 3.
+    all_indices, ## Don't need to repeat week 3.
     function(x, week){
       x |>
         dplyr::filter(!!sym(paste0("y", week))==1) |>
         dplyr::mutate(ytime = week)
     }
   ) |>
-    dplyr::bind_rows(dplyr::last(post_trt_indices) |>
+    dplyr::bind_rows(dplyr::last(all_indices) |>
                        dplyr::filter(!!sym(paste0("y", weeks)) == 0)) |> ## Remainder who didn't have outcome
     dplyr::mutate(trajid = row_number())
 
@@ -101,7 +113,7 @@ convert_to_long <- function(fup, weeks = 5){
       names_to = c(".value", "visit"),  # Split names to create 'visit' column
       names_pattern = "([a-z]+)([0-9]+)"  # Match variable type (enc, sev, trt, y) and visit number
     ) %>%
-    dplyr::select(trajid, visit, sev, trt, y, ytime, trttime, anyy) %>%
+    dplyr::select(trajid, visit, sev, trt, y, ytime, trttime, anyy) |>
     dplyr::mutate(
       visit = as.integer(visit)  # Ensure 'visit' is numeric
     ) |>
@@ -109,12 +121,13 @@ convert_to_long <- function(fup, weeks = 5){
                   is.na(trttime)|visit <= trttime) |>
     dplyr::mutate(
       trtcens = if_else(trt == 0, trttime, NA_real_) - 1,
-      admincens = visit + 3,
+      admincens = visit + 2,
       eventtime = pmin(trtcens, admincens, ytime, na.rm = T),
       delta = dplyr::case_when(
         is.na(ytime) ~ 0,
         eventtime == trtcens ~ 0,
-        eventtime == ytime ~ 1
+        eventtime == ytime ~ 1,
+        TRUE ~ 0
       ),
       t = eventtime - visit + 1
     ) |>
