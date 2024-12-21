@@ -41,6 +41,7 @@ make_trajectories <- function(trt_by_sev, # Treatment probability by severity
     dplyr::mutate(prob = ptrt1*py1*psev1) # Prob of pattern is P(S)xP(T|S)xP(Y|S,T)
 
 
+  if (index_weeks > 1){
   trt_indices <- purrr::accumulate(
     2:index_weeks,
     .init = week1,
@@ -60,6 +61,7 @@ make_trajectories <- function(trt_by_sev, # Treatment probability by severity
         )
     }
   )
+  } else {trt_indices <- list(week1)}
 
   ## Frame of probabilities for visits contributed after final index
   post_trt_frame <- frame |>
@@ -106,7 +108,7 @@ make_trajectories <- function(trt_by_sev, # Treatment probability by severity
 }
 
 
-convert_to_long <- function(fup, weeks = 5){
+convert_to_long <- function(fup, weeks = 5, index_weeks = 3){
   fup %>%
     dplyr::mutate(trttime = dplyr::case_when(
       trt1 == 1 ~ 1,
@@ -114,7 +116,7 @@ convert_to_long <- function(fup, weeks = 5){
       trt3 == 1 ~ 3,
       TRUE ~ NA_integer_),
       anyy = !is.na(ytime)) |>
-    dplyr::select(c("trajid", paste0("sev",1:weeks), paste0("trt", 1:weeks), trttime, paste0("y", 1:weeks), anyy, ytime)) |>
+    dplyr::select(c("trajid", paste0("sev",1:weeks), paste0("trt", 1:weeks), trttime, paste0("y", 1:weeks), anyy, ytime), prob) |>
     pivot_longer(
       cols =  c(sev1:!!sym(paste0("sev", weeks)),
                 trt1:!!sym(paste0("trt", weeks)),
@@ -122,7 +124,7 @@ convert_to_long <- function(fup, weeks = 5){
       names_to = c(".value", "visit"),  # Split names to create 'visit' column
       names_pattern = "([a-z]+)([0-9]+)"  # Match variable type (enc, sev, trt, y) and visit number
     ) %>%
-    dplyr::select(trajid, visit, sev, trt, y, ytime, trttime, anyy) |>
+    dplyr::select(trajid, visit, sev, trt, y, ytime, trttime, anyy, prob) |>
     dplyr::mutate(
       visit = as.integer(visit)  # Ensure 'visit' is numeric
     ) |>
@@ -140,10 +142,18 @@ convert_to_long <- function(fup, weeks = 5){
       ),
       t = eventtime - visit + 1
     ) |>
-    filter(visit <= 3) -> h
+    filter(visit <= index_weeks) -> h
   #dplyr::select(trajid, sevid, visit, enc, sev0=sev, trt, t, delta, iptw, admin) -> h
 
-  h
+  # Estimating IPTW bc gets complicated with combination of treatment probs and encounter probs
+  # (because equal to treatment prob at time 1, then P(Trt)xP(enc) at later times)
+  h |>
+    dplyr::group_by(sev) |>
+    dplyr::mutate(
+      ps = sum(prob*trt)/sum(prob),
+      iptw = trt/ps + (1-trt)/(1-ps)
+    ) |> dplyr::ungroup()
+
 }
 
 ## Convert the dataset that is one row per ID per index to a dataset that is
@@ -177,8 +187,8 @@ convert_long_to_longer <- function(h, fup, trt_enc_sev, weeks = 5){
       cum_puncens = cumprod(puncens),
       ipcw = trt + (1-trt)/cum_puncens,
       sev0 = sev[1], # Baseline severity
-      ps = trt_by_sev[sev0+1], # Probability of treatment cond. on baseline severity
-      iptw = trt/ps + (1-trt)/(1-ps) # Inverse probabilty of treatment weights
+      #ps = trt_by_sev[sev0+1], # Probability of treatment cond. on baseline severity
+      #iptw = trt/ps + (1-trt)/(1-ps) # Inverse probabilty of treatment weights
     )
 }
 
