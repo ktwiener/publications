@@ -8,7 +8,6 @@ create_sim_samples <- function(scen,
                                sims = 2000,
                                popsize = 5000){
 
-
   # Treatment effect
   out_by_sev_trt1 <- out_by_sev_trt0*effect
 
@@ -57,7 +56,7 @@ create_sim_samples <- function(scen,
 
   ## Setting up SNT.
   ## all the trajectories with probabilities
-  sntpop <- make_truepop(trt_by_sev = trt_by_sev_snt, # Treatment probability by severity
+  sntpop <- make_truepop(trt_by_sev = trt_by_sev, # Treatment probability by severity
                       enc_by_sev = enc_by_sev, # Encounter probability by severity
                       out_by_sev_trt0 = out_by_sev_trt0, # Outcome probability by severity for under no treatment
                       out_by_sev_trt1 = out_by_sev_trt1, # Outcome probability by severity under treatment

@@ -1,6 +1,14 @@
 
 ## Evaluate performance of estimator in each study type
 sim_performance <- function(d, truth){
+
+  truth <- truth |>
+    tidyr::pivot_longer( # Transpose long
+    cols = c(risk1, risk0, lnrr, rd),
+    names_to = "param",
+    values_to = "truth"
+  )
+
   d |>
     tidyr::pivot_longer( # Transpose long
       cols = c(risk1, risk0, lnrr, rd),
@@ -20,14 +28,15 @@ sim_performance <- function(d, truth){
 }
 
 
-scenario_performance <- function(scen){
-  truth <- readRDS(paste0("data/simulation/samples/scenario_truth_", scen, ".rds"))
+performance <- function(scen){
+  truth <- readRDS(paste0(dataloc, "samples/scenario_truth_", scen, ".rds"))
 
-  effs <- readRDS(paste0("data/simulation/effects/scenario", scen, ".rds"))
-  dists <- readRDS(paste0("data/simulation/effects/distrib", scen, ".rds"))
+  effs <- readRDS(paste0(dataloc, "effects/scenario", scen, ".rds"))
+  dists <- readRDS(paste0(dataloc, "effects/distrib", scen, ".rds"))
 
   h <- list(
     spt_res  = effs$spt_effect |>
+      dplyr::filter(sev == "Overall") |>
       sim_performance(truth),
 
     snt_snt_res = effs$snt_effect |>
@@ -44,7 +53,7 @@ scenario_performance <- function(scen){
   )
 
   h |>
-    saveRDS(paste0("data/simulation/performance/scenario", scen, ".rds"))
+    saveRDS(paste0(dataloc, "performance/scenario", scen, ".rds"))
 
   h
 

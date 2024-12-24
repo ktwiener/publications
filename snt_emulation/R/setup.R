@@ -5,10 +5,6 @@
 source(paste0(rfiles, "utils.R"))
 source(paste0(rfiles, "derive_treatment_prob.R"))
 
-
-## create blank canvas of possible pathways.
-source(paste0(rfiles, "trajectories.R"))
-
 ## create probabilistic population.
 source(paste0(rfiles, "truepop.R"))
 
