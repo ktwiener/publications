@@ -1,31 +1,13 @@
 library(dplyr)
 library(survival)
-rfiles <- "plans/Simulation/R/new/"
 
-## needed files.
-source(paste0(rfiles, "utils.R"))
-source(paste0(rfiles, "derive_treatment_prob.R"))
+rfiles <- "snt_emulation/R/"
+dataloc <- "snt_emulation/data/"
 
 ## Same for all scenarios
-weeks <- 3
+weeks <- 5
 popsize <- 5000
-sims <- 500
-out_by_sev_trt0 <- c(0.09, 0.16)
-trt_by_sev <- c(0.2, 0.6)
-
-## create blank canvas of possible pathways.
-source(paste0(rfiles, "trajectories.R"))
-
-## create probabilistic population.
-source(paste0(rfiles, "truepop.R"))
-
-## function to generate samples for each scenario
-source(paste0(rfiles, "create_sim_samples.R"))
-
-## estimating effects functions
-source(paste0(rfiles, "effects.R"))
-source(paste0(rfiles, "performance.R"))
-# Settings
+sims <- 2000
 
 ## Changes by scenario
 enc_by_sev_nomod <- c(0.4, 0.4)
@@ -33,34 +15,52 @@ enc_by_sev_mod <- c(0.4, 0.2)
 homg_effect <- 0.5
 hetg_effect <- c(0.7, 0.3)
 
+source(paste0(rfiles, "setup.R"))
+
+## IF YOU WOULD lke to test settings, go to test_settings.R.
+
 set.seed(24601) # RNG
 
+## Scenario 0: null treatment effect, no confounding,
+create_sim_samples(scen = 0,
+                   effect = 1,
+                   enc_by_sev = enc_by_sev_nomod,
+                   sims = sims)
+
 ## Scenario 1: no modification, severity does not influence encounters
-create_sim_samples(out_by_sev_trt1 = out_by_sev_trt0*homg_effect,
-                       enc_by_sev = enc_by_sev_nomod, 1)
+create_sim_samples(scen = 1,
+                   effect = homg_effect,
+                   enc_by_sev = enc_by_sev_nomod,
+                   sims = sims)
 
 ## Scenario 2: modification, severity does not influence encounters
-create_sim_samples(out_by_sev_trt1 = out_by_sev_trt0*hetg_effect,
-                     enc_by_sev = enc_by_sev_nomod, 2)
+create_sim_samples(scen = 2,
+                   effect = hetg_effect,
+                   enc_by_sev = enc_by_sev_nomod,
+                   sims = sims)
 
 ## Scenario 3: no modification, severity does influence encounters
-create_sim_samples(out_by_sev_trt1 = out_by_sev_trt0*homg_effect,
-                           enc_by_sev = enc_by_sev_mod, 3)
+create_sim_samples(scen = 3,
+                   effect = homg_effect,
+                   enc_by_sev = enc_by_sev_mod,
+                   sims = sims)
 
 ## Scenario 4: modification, severity does influence encounters
-create_sim_samples(out_by_sev_trt1 = out_by_sev_trt0*hetg_effect,
-                           enc_by_sev = enc_by_sev_mod, 4)
+create_sim_samples(scen = 4,
+                   effect = hetg_effect,
+                   enc_by_sev = enc_by_sev_mod,
+                   sims = sims)
 
 ## Estimate effects
 purrr::walk(
-  1:4,
+  0:4,
   estimate_effects
 )
 
 ## Performance measures
 test <- purrr::map(
-  1:4,
-  scenario_performance
+  0:4,
+  performance
 )
 
 
