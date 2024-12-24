@@ -1,196 +1,198 @@
 
-## Create the population with realized potential outcomes.
-## Will assign treatment after this step.
-## This population should apply to all trials within a scenario.
+## Make generic frame of information needed at each visit.
+make_truepop <- function(trt_by_sev, # Treatment probability by severity
+                              enc_by_sev, # Encounter probability by severity
+                              out_by_sev_trt0, # Outcome probability by severity for under no treatment
+                              out_by_sev_trt1, # Outcome probability by severity under treatment
+                              sev_prob = 0.25, # Probability of severity progression at each visit
+                              index_weeks = 3, # Number of visits that contribute indices
+                              weeks = 5){ # Full number of visits
 
-truepop <- function(enc_by_sev, out_by_sev_trt0, out_by_sev_trt1, trajectories, weeks){
-  trajectories |>
+  fup_weeks <- weeks - index_weeks # Number of visits after indices are contributed
+
+  ## All possible combinations of severity, treatment, and outcome
+  dplyr::tibble(sev = 0:1) |>
+    dplyr::cross_join(
+      dplyr::tibble(enc = 0:1)
+    ) |>
+    dplyr::cross_join(
+      dplyr::tibble(trt = 0:1)
+    ) |>
+    dplyr::cross_join(
+      dplyr::tibble(y = 0:1)
+    ) |>
     dplyr::mutate(
-      ## Map over all time varying things and create probabilities of the combinations
-      purrr::pmap_dfc(
-        list(
-          1:weeks,
-          trajectories[paste0("sev", 1:weeks)],
-          trajectories[paste0("enc", 1:weeks)],
-          trajectories[paste0("y0",  1:weeks)],
-          trajectories[paste0("y1",  1:weeks)]
-        ),
-        function(i, sev, enc, py0, py1){
-          ## If encounter/potential outcome occurs, probability is corresponding entry in  the
-          ## probability by severity vector
-          ## Else the probability is 1 - prob of encounter/potential outcome occurring by severity.
-          dplyr::tibble(
-            enc = enc*enc_by_sev[sev+1] +  (1-enc)*(1-enc_by_sev[sev+1]),
-            py0 = py0*out_by_sev_trt0[sev+1] +  (1-py0)*(1-out_by_sev_trt0[sev+1]),
-            py1 = py1*out_by_sev_trt1[sev+1] +  (1-py1)*(1-out_by_sev_trt1[sev+1])
-          ) %>%
-            purrr::set_names(paste0("prob_", c("enc", "y0", "y1"),i))
-        }
-      ),
-      prob_enc1 = 1
-    ) -> h
+      # Prob of observed severity
+      psev = sev*sev_prob + (1-sev)*(1-sev_prob),
+      ## Probability of observed treatment
+      ptrt = trt*trt_by_sev[sev + 1] + (1-trt)*(1-trt_by_sev[sev + 1]),
+      ## Probability of observed encounter
+      penc = enc*enc_by_sev[sev + 1] + (1-enc)*(1-enc_by_sev[sev+1]),
+      trt = trt*enc,
+      ## Probability of observed outcome
+      py = y*(enc*trt*out_by_sev_trt1[sev + 1] + (1-trt)*out_by_sev_trt0[sev + 1]) + # Prob of outcome based on trt
+        (1-y)*(enc*trt*(1-out_by_sev_trt1[sev + 1]) + (1-trt)*(1-out_by_sev_trt0[sev + 1])) # Prob of no outcome based on trt & sev
+    ) -> frame
 
-  h$prob <-  h$prob_traj *
-             Reduce(`*`, dplyr::select(h, paste0("prob_enc", 1:weeks))) *
-             Reduce(`*`, dplyr::select(h, paste0("prob_y0", 1:weeks))) *
-             Reduce(`*`, dplyr::select(h, paste0("prob_y1", 1:weeks)))
+  ## Make initial week of indices
+  week1 <- frame |>
+    dplyr::filter(enc == 1) |>
+    set_names(paste0(names(frame), 1)) |>
+    dplyr::mutate(penc1 = 1) |>
+    dplyr::distinct() |>
+    dplyr::mutate(prob = ptrt1*py1*psev1) # Prob of pattern is P(S)xP(T|S)xP(Y|S,T)
 
-  h
+
+  if (index_weeks > 1){
+  trt_indices <- purrr::accumulate(
+    2:index_weeks,
+    .init = week1,
+    .f = function(prior, week){ # Takes in prior week and adds new week
+      frame |>
+        dplyr::cross_join(prior |> dplyr::filter(!!sym(paste0("y", week-1)) == 0)) |> # Limit prior week to where outcomes didn't happen
+        dplyr::filter(!!sym(paste0("trt", week-1)) <= trt, # Filter to make sure treatment severity monotically increasing
+                      !!sym(paste0("sev", week-1)) <= sev) |>
+        dplyr::mutate(
+          # Prior prob x prob of treatment = max of prior treatment or being treated x prob of outcome x max of being severe or already severe
+          prob = prob*pmax(ptrt*penc, !!sym(paste0("trt", week-1)))*py*pmax(psev, !!sym(paste0("sev", week-1)))
+        ) %>%
+        dplyr::rename_with(
+          .fn = ~ sub("([a-z]+)$", paste0("\\1", week), .x), # Add '2' to the end of matching columns
+          .cols = sev:py                     # Specify the range of columns to rename
+        )
+    }
+  )
+  } else {trt_indices <- list(week1)}
+
+  ## Frame of probabilities for visits contributed after final index
+  post_trt_frame <- frame |>
+    dplyr::distinct(sev, psev, trt, y, py) |>
+    dplyr::mutate(penc = 1, enc = 1, ptrt = 1) # Treatment doesn't change
+
+  if (fup_weeks > 0) {
+    post_trt_indices <- purrr::accumulate(
+      (index_weeks + 1):weeks,
+      .init = trt_indices[[index_weeks]],
+      function(prior, week){
+        post_trt_frame |>
+          dplyr::cross_join(prior |> dplyr::filter(!!sym(paste0("y", week-1)) == 0)) |>
+          dplyr::filter(!!sym(paste0("trt", week-1)) == trt, ## treatment doesn't change
+                        !!sym(paste0("sev", week-1)) <= sev) |>
+          dplyr::mutate(prob = prob*py*pmax(psev, !!sym(paste0("sev", week-1)))) |>
+          dplyr::rename_with(
+            .fn = ~ sub("([a-z]+)$", paste0("\\1", week), .x), # Add '2' to the end of matching columns
+            .cols = sev:ptrt                     # Specify the range of columns to rename
+          )
+      }
+    )
+
+    all_indices <- c(trt_indices, post_trt_indices[-1])
+  } else {all_indices <- trt_indices}
+
+
+
+  ## Final accumulation
+  fup <- purrr::imap_dfr(
+    all_indices, ## Don't need to repeat week 3.
+    function(x, week){
+      x |>
+        dplyr::filter(!!sym(paste0("y", week))==1) |>
+        dplyr::mutate(ytime = week)
+    }
+  ) |>
+    dplyr::bind_rows(dplyr::last(all_indices) |>
+                       dplyr::filter(!!sym(paste0("y", weeks)) == 0)) |> ## Remainder who didn't have outcome
+    dplyr::mutate(trajid = row_number())
+
+  fup
+
 }
 
-truepop_treat <- function(pop, treatments, severity, trt_by_sev){
 
-  snt_trt <- treatments |>
-    cross_join(severity) |> # All possible treatment/severity combos.
-    dplyr::mutate(
-      # Probability of each treatment at each time point
-      ptrt1 = trt_by_sev[sev1 + 1]*trt1 + (1-trt_by_sev[sev1 + 1])*(1-trt1),
-      ptrt2 = trt_by_sev[sev2 + 1]*trt2 + (1-trt_by_sev[sev2 + 1])*(1-trt2),
-      ptrt3 = trt_by_sev[sev3 + 1]*trt3 + (1-trt_by_sev[sev3 + 1])*(1-trt3),
-      # Overall probability of that treatment pattern
-      ptrt = ptrt1*ptrt2*ptrt3)
+convert_to_long <- function(fup, weeks = 5, index_weeks = 3){
 
-  snt_trt |>
-    # Each trajectory already defined can exist within each treatment pattern
-    dplyr::full_join(pop, by = c("sevid", "sev1", "sev2", "sev3"), relationship = "many-to-many") |>
-    dplyr::mutate(
-      prob = prob*ptrt, # Probability of trajectory with treatment pattern
-      trt1 = trt1*enc1, # But actually treatment can only happen if encounter happens
-      trt2 = trt2*enc2, # Ditto
-      trt3 = trt3*enc3, # Ditto
-
-      # Once treated, stay treated
-      trt2 = pmax(trt1, trt2),
-      trt3 = pmax(trt1, trt2, trt3),
-      # Time of first treatment (will be censor time for untreated indices)
-      trttime = dplyr::case_when(trt1 == 1 ~ 1, trt2 == 1 ~ 2, trt3 == 1 ~ 3, TRUE ~ NA_integer_),
-    ) |>
-    dplyr::mutate(
-      # Assign observed outcome at each time point based on treated (SNT)
-      y1 = trt1*y11 + (1-trt1)*y01,
-      y2 = trt2*y12 + (1-trt2)*y02,
-      y3 = trt3*y13 + (1-trt3)*y03,
-      y2 = pmax(y1, y2),
-      y3 = pmax(y2, y3),
-      # Time to outcome (first time observed outcome)
-      ytime  = dplyr::case_when(y1 == 1 ~ 1, y2 == 1 ~ 2, y3 == 1 ~ 3, TRUE ~ NA_integer_),
-      delta = as.numeric(!is.na(ytime)),
-
-      # SPT potential outcomes
-      py0 = pmax(y01, y02, y03),
-      py1 = pmax(y11, y12, y13)
-    ) |>
-    # Sum together probabilities that have the same trajectory after assigning treatment and observed outcome
-    dplyr::group_by(sevid, enc1, enc2, enc3, sev1, sev2, sev3, trt1, trt2, trt3, trttime, y1, y2, y3, py0, py1, ytime, delta) |>
-    dplyr::summarize(prob = sum(prob)) |>
-    dplyr::ungroup()  -> hold
-
-     bind_rows(
-      hold |> dplyr::mutate(trt = 0, y = py0, sev = sev1),
-      hold |> dplyr::mutate(trt = 1, y = py1, sev = sev1)
-    ) |>
-      dplyr::mutate(prob = 0.5*prob) |>
-      dplyr::mutate(trajid = row_number())
-}
-
-convert_snt_indices <- function(sample_pop){
-  sample_pop %>%
-    dplyr::select( c(sim, id, sevid, enc1:enc3, sev1:sev3, trt1:trt3, trttime, y1:y3, anyy = delta, ytime)) |>
+  fup %>%
+    dplyr::mutate(trttime = dplyr::case_when(
+      trt1 == 1 ~ 1,
+      trt2 == 1 ~ 2,
+      trt3 == 1 ~ 3,
+      TRUE ~ NA_integer_),
+      anyy = !is.na(ytime)) |>
+    dplyr::select(c("trajid", paste0("sev",1:weeks), paste0("enc",1:weeks),
+                    paste0("trt", 1:weeks), trttime, paste0("y", 1:weeks), anyy, ytime), prob) |>
     pivot_longer(
-      cols =  c(enc1:enc3, sev1:sev3, trt1:trt3, y1:y3),  # Include columns from enc1 to y3
+      cols =  c(sev1:!!sym(paste0("sev", weeks)),
+                enc1:!!sym(paste0("enc", weeks)),
+                trt1:!!sym(paste0("trt", weeks)),
+                y1:!!sym(paste0("y", weeks))),
       names_to = c(".value", "visit"),  # Split names to create 'visit' column
       names_pattern = "([a-z]+)([0-9]+)"  # Match variable type (enc, sev, trt, y) and visit number
     ) %>%
-    select(sim, id, sevid, visit, enc, sev, trt, y, ytime, trttime, anyy) %>%
-    mutate(
+    dplyr::select(trajid, visit, enc, sev, trt, y, ytime, trttime, anyy, prob) |>
+    dplyr::mutate(
       visit = as.integer(visit)  # Ensure 'visit' is numeric
     ) |>
-    dplyr::filter(visit <= trttime | is.na(trttime), # Filter to visits before or up to first treatment
-                  ytime >= visit  | is.na(ytime)) |>  # Filter to visits before or up to outcome
+    dplyr::filter(!is.na(y),
+                  is.na(trttime)|visit <= trttime) |>
     dplyr::mutate(
-      # Event indicator
+      trtcens = if_else(trt == 0, trttime, NA_real_) - 1,
+      admincens = visit + 2,
+      eventtime = pmin(trtcens, admincens, ytime, na.rm = T),
       delta = dplyr::case_when(
-        trt == 1 ~ anyy, # If treated, event if any
-        trt == 0 & is.na(trttime) ~ anyy, # If not treated, all indices have event (or not)
-        TRUE ~ y # Otherwise, censored at treatment
+        is.na(ytime) ~ 0,
+        eventtime == trtcens ~ 0,
+        eventtime == ytime ~ 1,
+        TRUE ~ 0
       ),
-      censtime = (1-trt)*pmin(trttime, 3, na.rm = T) + trt*3,
-      eventtime = pmin(censtime, ytime, na.rm = T),
       t = eventtime - visit + 1
     ) |>
-    dplyr::select(sim, id, sevid, visit, enc, sev, trt, t, delta)
-}
+    filter(visit <= index_weeks) -> h
+  #dplyr::select(trajid, sevid, visit, enc, sev0=sev, trt, t, delta, iptw, admin) -> h
 
-convert_to_long <- function(pop){
- pop %>%
-    dplyr::select( c(trajid, sevid, enc1:enc3, sev1:sev3, trt1:trt3, trttime, y1:y3, anyy = delta, ytime)) |>
-    pivot_longer(
-      cols =  c(enc1:enc3, sev1:sev3, trt1:trt3, y1:y3),  # Include columns from enc1 to y3
-      names_to = c(".value", "visit"),  # Split names to create 'visit' column
-      names_pattern = "([a-z]+)([0-9]+)"  # Match variable type (enc, sev, trt, y) and visit number
-    ) %>%
-    select(trajid, sevid, visit, enc, sev, trt, y, ytime, trttime, anyy) %>%
-    mutate(
-      visit = as.integer(visit)  # Ensure 'visit' is numeric
-    ) |>
-    dplyr::filter(visit <= trttime | is.na(trttime), # Filter to visits before or up to first treatment
-                  ytime >= visit  | is.na(ytime)) |>  # Filter to visits before or up to outcome
+  # Estimating IPTW bc gets complicated with combination of treatment probs and encounter probs
+  # (because equal to treatment prob at time 1, then P(Trt)xP(enc) at later times)
+  h |>
+    dplyr::group_by(sev) |>
     dplyr::mutate(
-      # Event indicator
-      delta = dplyr::case_when(
-        trt == 1 ~ anyy, # If treated, event if any
-        trt == 0 & is.na(trttime) ~ anyy, # If not treated, all indices have event (or not)
-        TRUE ~ y # Otherwise, censored at treatment
-      ),
-      censtime = (1-trt)*pmin(trttime, 3, na.rm = T) + trt*3,
-      eventtime = pmin(censtime, ytime, na.rm = T),
-      t = eventtime - visit + 1
-    ) |>
-    dplyr::select(trajid, sevid, visit, enc, sev0=sev, trt, t, delta) -> h
+      ps = sum(prob*trt)/sum(prob),
+      iptw = trt/ps + (1-trt)/(1-ps)
+    ) |> dplyr::ungroup()
 
-  h
 }
 
-convert_long_to_longer <- function(h, severity, trt_enc_sev){
-
-  survSplit(Surv(t, delta) ~ .,
+## Convert the dataset that is one row per ID per index to a dataset that is
+## one row per ID per index per time intereval
+convert_long_to_longer <- function(h, fup, trt_enc_sev, weeks = 5, index_weeks = 3){
+  h$final_t <- h$t
+  survSplit(Surv(t, delta) ~ ., # splits each time to event into one row per interval of length 1
             data = h,
-            cut = 1:3,
-            start = "t_in",
-            end = "t_out",
+            cut = 1:2, # each index contributes 3 time points
+            start = "t_in", # time "in" (open on left)
+            end = "t_out", # time out (closed on right)
             id = "index",
             event = "delta") |>
     dplyr::as_tibble() |>
     dplyr::mutate(
-      sev = purrr::map2_dbl(
-        sevid,
+      sev = purrr::map2_dbl( # Time varying severity based on weeks in FUP dataset
+        trajid,
         visit+t_in,
-        ~unlist(severity[.x, 1:3])[.y]
+        ~unlist(fup[.x, paste0("sev", 1:weeks)])[.y]
       )
     ) |>
     dplyr::mutate(
-      puncens = 1-trt_enc_sev[sev+1]
+      puncens = dplyr::if_else(
+        trt==1|t_in==0|visit+t_in>index_weeks, ## Assign weight of 1 if treatment is 1, or
+        1,                           ##  if first index (no chance of censoring), or
+        1-trt_enc_sev[sev+1])        ## if time is after first 3 visits (no chance of censoring)
     ) |>
     dplyr::group_by(index) |>
     dplyr::mutate(
-      cum_puncens = lag(cumprod(puncens), default = 1),
-      ipcw = 1/cum_puncens
-    )
+      cum_puncens = cumprod(puncens),
+      ipcw = trt + (1-trt)/cum_puncens,
+      sev0 = sev[1], # Baseline severity
+      #ps = trt_by_sev[sev0+1], # Probability of treatment cond. on baseline severity
+      #iptw = trt/ps + (1-trt)/(1-ps) # Inverse probabilty of treatment weights
+    ) |>
+    dplyr::ungroup()
 }
-
-## Possible SPT trajectories
-#
-# spt_treat <- function(pop){
-#   bind_rows(
-#     pop |> dplyr::mutate(a = 1, prob = 0.5*prob), # Each trajectory has equal prob of treatment
-#     pop |> dplyr::mutate(a = 0, prob = 0.5*prob)
-#   ) |>
-#     dplyr::mutate(
-#       y0 = pmax(y01, y02, y03), # Potential outcome under no treatment is max
-#       y1 = pmax(y11, y12, y13), # Potential outcome under treatment
-#       y  = a*y1 + (1-a)*y0    # Observed outcome
-#     ) |>
-#     dplyr::mutate(id = row_number()) |>
-#     dplyr::as_tibble()
-# }
 
