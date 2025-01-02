@@ -1,5 +1,6 @@
 library(dplyr)
 library(survival)
+library(gt)
 
 rfiles <- "snt_emulation/R/"
 dataloc <- "snt_emulation/data/"
@@ -53,14 +54,26 @@ create_sim_samples(scen = 4,
 
 ## Estimate effects
 purrr::walk(
-  0:4,
-  estimate_effects
+  1:4,
+  estimate_effects,
+  sims = sims
 )
 
-## Performance measures
-test <- purrr::map(
-  0:4,
-  performance
-)
+## Index table
+indices <- purrr::map(1:4, make_index_table)
 
+indices |>
+  purrr::imap_dfr(
+    .f = ~{
+      .x |> dplyr::mutate(scenario = .y)
+    }
+  ) |>
+  gt() |>
+  gtsave("snt_emulation/results/index_table.rtf")
 
+## Performance table
+purrr::walk(1:4,performance)
+
+purrr::map_dfr(1:4,make_perf_table) |>
+  gt() |>
+  gtsave("snt_emulation/results/performance_table.rtf")

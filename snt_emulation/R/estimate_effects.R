@@ -1,6 +1,6 @@
 
 
-estimate_effects <- function(scen, sims = 1000){
+estimate_effects <- function(scen, sims = 2000){
   ## Load the samples
   samples <- list.files(paste0(dataloc, "samples/scenario", scen), full.names = T)[1:(sims/100)]
 

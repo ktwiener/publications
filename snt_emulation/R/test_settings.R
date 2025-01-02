@@ -17,7 +17,7 @@ homg_effect <- 1
 hetg_effect <- c(0.7, 0.3)
 
 rctfup <- make_trajectories(trt_by_sev = c(0.5, 0.5),
-                         enc_by_sev = c(0.5, 0.5),
+                         enc_by_sev = c(0.4, 0.6),
                          out_by_sev_trt0,
                          out_by_sev_trt0*homg_effect,
                          sev_prob = 0.25,
