@@ -8,3 +8,5 @@
 *.rds
 *.html
 *.rtf
+snt_emulation/results/*
+snt_emulation/snt_results_files/*
