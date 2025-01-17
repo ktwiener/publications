@@ -10,7 +10,7 @@ all_scripts <- list.files("R", pattern = "*.R", full.names = T)
 purrr::walk(all_scripts, source)
 
 date <- Sys.Date()
-nsims <- 5
+nsims <- 5000
 positivity <- c("Full", "Partial")
 delt <- c("None","Homogeneous", "Heterogeneous")
 probw <- c(25, 50, 75)
