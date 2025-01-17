@@ -47,7 +47,9 @@ make_table <- function(measures, measest = "lnrr"){
         )
 }
 
-boxplot <- function(measures, effect = "Homogeneous", ipttype = "hajek") {
+boxplot <- function(measures, effect = "Homogeneous", ipttype = "hajek", measure = "rr") {
+  measures <- measures |>
+    dplyr::filter(measure == "rr")
   patt <- paste0(ipttype, "|smr")
   as_tibble(measures) |>
     dplyr::select(Param = params, positivity, efftype, probw, delta, bias) |>

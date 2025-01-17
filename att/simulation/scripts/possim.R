@@ -1,5 +1,4 @@
-# Script to run through simulations ----
-setwd("~/Development/possim")
+setwd("att/simulation")
 ## Set up environment/libraries ----
 library(dplyr)
 library(geex)

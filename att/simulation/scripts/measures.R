@@ -6,7 +6,7 @@ source("R/performance.R")
 source("R/utils.R")
 source("R/settings.R")
 
-date <- "2024-10-11"
+date <- Sys.Date()
 positivity <- c("Full", "Partial")
 delt <- c("None","Homogeneous", "Heterogeneous")
 probw <- c(25, 50, 75)
@@ -20,7 +20,7 @@ measures <-
                           date = date, stringsAsFactors = FALSE),
         .f =  function(positivity, delt, probw, date) {
           setting_file <- dplyr::last(list.files(path = "data/settings/",
-                                                 pattern = date, full.names = T))
+                                                 pattern = as.character(date), full.names = T))
           patt <- paste0(tolower(c(positivity, delt, probw)), collapse = "-")
           results_files <- list.files(sprintf("data/simulations/%s/%s", date, meas), pattern = patt, full.names = T)
           results <- purrr::map_dfr(results_files, readRDS)

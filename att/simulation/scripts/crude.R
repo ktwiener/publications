@@ -9,8 +9,8 @@ library(rootSolve)
 all_scripts <- list.files("R", pattern = "*.R", full.names = T)
 purrr::walk(all_scripts, source)
 
-date <- "2024-10-11"
-nsims <- 5000
+date <- Sys.Date()
+nsims <- 5
 positivity <- c("Full", "Partial")
 delt <- c("None","Homogeneous", "Heterogeneous")
 probw <- c(25, 50, 75)
@@ -35,13 +35,15 @@ run_sims <- function(positivity = positivity,
   saveRDS(res, sprintf("data/simulations/%s/%s/crude-%s-%s.rds", date, measure, patt, nsims))
 }
 
-# s <- Sys.time()
-# purrr::pwalk(
-#   scenarios,
-#   run_sims
-# )
-# fin_fut <- Sys.time() - s
+## RR
+s <- Sys.time()
+purrr::pwalk(
+  scenarios,
+  run_sims
+ )
+fin_fut <- Sys.time() - s
 
+## OR
 s <- Sys.time()
 purrr::pwalk(
   scenarios,

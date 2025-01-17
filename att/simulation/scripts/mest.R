@@ -9,7 +9,7 @@ library(rootSolve)
 all_scripts <- list.files("R", pattern = "*.R", full.names = T)
 purrr::walk(all_scripts, source)
 
-date <- "2024-10-11"
+date <- Sys.Date()
 
 nsims <- 5000
 positivity <- c("Full", "Partial")
@@ -20,6 +20,7 @@ scenarios <- expand.grid(positivity = positivity, delt = delt, probw = probw,
                          date = date, nsims = nsims, stringsAsFactors = FALSE)
 
 run_sims <- function(positivity, delt, probw, date, nsims = 5000, measure = "rr"){
+
   patt <- paste0(tolower(c(positivity, delt, probw)), collapse = "-")
   files <- list.files(sprintf("data/population/%s/%s", date, measure), pattern = patt, full.names = T)
   pop <- read_csv(files)
@@ -34,13 +35,15 @@ run_sims <- function(positivity, delt, probw, date, nsims = 5000, measure = "rr"
   saveRDS(res, sprintf("data/simulations/%s/%s/%s-%s.rds", date, measure, patt, nsims))
 }
 
-# s <- Sys.time()
-# purrr::pwalk(
-#   scenarios,
-#   run_sims
-# )
-# fin_fut <- Sys.time() - s
+## RR
+ s <- Sys.time()
+ purrr::pwalk(
+   scenarios,
+   run_sims
+ )
+ fin_fut <- Sys.time() - s
 
+ ## OR
 s <- Sys.time()
 purrr::pwalk(
   scenarios,

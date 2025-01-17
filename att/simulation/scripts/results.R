@@ -4,7 +4,7 @@ library(ggplot2)
 library(dplyr)
 all_scripts <- list.files("R", pattern = "*.R", full.names = T)
 purrr::walk(all_scripts, source)
-date <- "2024-10-11"
+date <- Sys.Date()
 
 measures <- readRDS(sprintf("data/results/raw/%s-measures.rds", date))
 
@@ -80,3 +80,4 @@ ggsave(filename = sprintf("data/results/figures/%s-homogeneous-ht-box.png", date
        width = 6,
        height = 6
 )
+
