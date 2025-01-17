@@ -1,0 +1,160 @@
+---
+title: "SNT Emulation Results"
+format: html
+editor: visual
+---
+
+```{r, include = FALSE}
+library(dplyr, warn.conflicts = FALSE)
+
+# Suppress summarise info
+options(dplyr.summarise.inform = FALSE)
+library(gt)
+library(ggplot2)
+sims <- 2000
+rfiles <- "R/"
+dataloc <- "data/"
+resloc <- "results/"
+
+purrr::walk(
+  list.files(path = rfiles, recursive = F, full.names = T, pattern = "*.R"),
+  source
+  )
+
+```
+
+```{r, echo = F}
+
+## Index table
+indices <- purrr::map(1:4, make_index_table, sims = 2000)
+
+ind_tbl <- indices |>
+  purrr::imap_dfr(
+    .f = ~{
+      .x |> dplyr::mutate(scenario = .y,
+                          rank = c(1, 2, 2, 3, 4, 4),
+                          rank2 = dplyr::case_when(
+                            name == "Low" ~ 1,
+                            name == "High" ~ 2,
+                            TRUE ~ 0
+                          )) |> 
+        dplyr::arrange(rank, rank2)
+    }
+  ) |> 
+  dplyr::mutate(
+    grp = if_else(grp == "", name, grp)
+  ) |> 
+  dplyr::select(
+    Scenario = scenario,
+    grp, name, spt1:td0
+  ) |>
+  gt() 
+
+ind_tbl |> 
+  gtsave("results/index_table.rtf")
+
+ind_tbl
+```
+
+## Performance table
+```{r}
+purrr::walk(1:4,performance)
+
+purrr::map_dfr(1:4,make_perf_table) |>
+  dplyr::mutate(
+    across(matches("bias|ese|rmse"), ~formatC(.x, digits = 3, format = "f"))
+  ) |>
+  dplyr::select(matches("^(?!.*mcse).*", perl = T)) |> 
+  gt() -> perf
+
+perf |>
+  gtsave("results/performance_table.rtf")
+
+purrr::map_dfr(1:4,make_perf_table) |>
+  dplyr::mutate(
+    across(matches("bias|ese|rmse"), ~formatC(.x, digits = 4, format = "f"))
+  ) |>
+  dplyr::select(scenario, analyze, target, contains("mcse")) |> 
+  gt() |>
+  gtsave("results/performance_table_mcse.rtf")
+
+perf
+```
+
+## Performance figure ATE
+```{r, warning=FALSE}
+
+fig <- purrr::map_dfr(1:4,make_perf_figure) |> 
+  dplyr::filter(pop %in% c("ate", "crude")) |> 
+  dplyr::mutate(
+    shape_lbl = factor(
+      dplyr::case_when(
+      pop == "crude" ~ "Crude", 
+      target == "td" ~ "SNT",
+      TRUE ~ toupper(target)
+    ),
+    levels = c("Crude", "SNT", "SPT")),
+    analyze = factor(analyze, levels = c("spt", "snt", "td"), 
+                     labels = c("SPT", "SNT", "SNT w/ lab")),
+    scenario = factor(scenario, 1:4, 
+                      labels = paste0("Scenario ", 1:4))
+  )
+
+ggplot(fig, mapping = aes(x = analyze, y = rr, group = shape_lbl, shape = shape_lbl)) +
+  geom_hline(aes(yintercept = truth), linetype = "dashed", color = "red", size = 1) +
+  geom_point(size = 3, position = position_dodge(width = 0.5)) +
+  scale_y_continuous(limits = c(0.5, 0.75), breaks = seq(0.5, 0.75, by = 0.05)) +
+  labs(x = "Analyzed population", y = "Risk ratio", shape = "Target population") +
+  theme_classic() +
+  facet_wrap(~scenario, axes = "all_x") +
+  theme(
+    text = element_text(size = 10),           # Base font size for all text
+    axis.title = element_text(size = 12),     # Font size for axis titles
+    axis.text = element_text(size = 10),      # Font size for axis tick labels
+    legend.title = element_text(size = 12),   # Font size for legend titles
+    legend.text = element_text(size = 10),     # Font size for legend labels
+    legend.position = "bottom"
+  )
+
+ggsave(filename = "performance.png", path = paste0(resloc, "figures"), units = "in", width = 6, height = 5)
+
+```
+
+## Performance figure ATT
+```{r, warning=FALSE}
+
+fig <- purrr::map_dfr(1:4,make_perf_figure) |> 
+  dplyr::filter(pop %in% c("att", "crude")) |> 
+  dplyr::mutate(
+    shape_lbl = factor(
+      dplyr::case_when(
+      pop == "crude" ~ "Crude", 
+      target == "td" ~ "SNT",
+      TRUE ~ toupper(target)
+    ),
+    levels = c("Crude", "SNT", "SPT")),
+    analyze = factor(analyze, levels = c("spt", "snt", "td"), 
+                     labels = c("SPT", "SNT", "SNT w/ lab")),
+    scenario = factor(scenario, 1:4, 
+                      labels = paste0("Scenario ", 1:4))
+  )
+
+ggplot(fig, mapping = aes(x = analyze, y = rr, group = shape_lbl, shape = shape_lbl)) +
+  geom_hline(aes(yintercept = truth), linetype = "dashed", color = "red", size = 1) +
+  geom_point(size = 3, position = position_dodge(width = 0.5)) +
+  scale_y_continuous(limits = c(0.5, 0.75), breaks = seq(0.5, 0.75, by = 0.05)) +
+  labs(x = "Analyzed population", y = "Risk ratio", shape = "Target population") +
+  theme_classic() +
+  facet_wrap(~scenario, axes = "all_x") +
+  theme(
+    text = element_text(size = 10),           # Base font size for all text
+    axis.title = element_text(size = 12),     # Font size for axis titles
+    axis.text = element_text(size = 10),      # Font size for axis tick labels
+    legend.title = element_text(size = 12),   # Font size for legend titles
+    legend.text = element_text(size = 10),     # Font size for legend labels
+    legend.position = "bottom"
+  )
+
+ggsave(filename = "performance_att.png", path = paste0(resloc, "figures"), units = "in", width = 6, height = 5)
+
+```

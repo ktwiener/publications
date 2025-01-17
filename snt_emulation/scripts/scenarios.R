@@ -1,9 +1,15 @@
+## Generate all simulation data and estimate effects
+
 library(dplyr)
 library(survival)
-library(gt)
 
 rfiles <- "snt_emulation/R/"
 dataloc <- "snt_emulation/data/"
+
+purrr::walk(
+  list.files(path = rfiles, recursive = F, full.names = T, pattern = "*.R"),
+  source
+  )
 
 ## Same for all scenarios
 weeks <- 5
@@ -12,13 +18,11 @@ sims <- 2000
 
 ## Changes by scenario
 enc_by_sev_nomod <- c(0.4, 0.4)
-enc_by_sev_mod <- c(0.4, 0.2)
+enc_by_sev_mod <- c(0.2, 0.6)
 homg_effect <- 0.5
-hetg_effect <- c(0.7, 0.3)
+hetg_effect <- c(0.3, 0.75)
 
-source(paste0(rfiles, "setup.R"))
-
-## IF YOU WOULD lke to test settings, go to test_settings.R.
+## IF YOU WOULD lke to test settings, go to scratch/test_settings.R.
 
 set.seed(24601) # RNG
 
@@ -52,28 +56,10 @@ create_sim_samples(scen = 4,
                    enc_by_sev = enc_by_sev_mod,
                    sims = sims)
 
-## Estimate effects
+
+## Effect estimation
 purrr::walk(
   1:4,
   estimate_effects,
   sims = sims
 )
-
-## Index table
-indices <- purrr::map(1:4, make_index_table)
-
-indices |>
-  purrr::imap_dfr(
-    .f = ~{
-      .x |> dplyr::mutate(scenario = .y)
-    }
-  ) |>
-  gt() |>
-  gtsave("snt_emulation/results/index_table.rtf")
-
-## Performance table
-purrr::walk(1:4,performance)
-
-purrr::map_dfr(1:4,make_perf_table) |>
-  gt() |>
-  gtsave("snt_emulation/results/performance_table.rtf")

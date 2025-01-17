@@ -36,8 +36,7 @@ performance <- function(scen){
 
   h <- list(
     spt_res  = effs$spt_effect |>
-      dplyr::filter(sev == "Overall") |>
-      sim_performance(truth),
+      standardize_emulation(dists$spt_dist, truth),
 
     snt_snt_res = effs$snt_effect |>
       standardize_emulation(dists$snt_dist, truth),

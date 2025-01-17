@@ -6,7 +6,11 @@ create_sim_samples <- function(scen,
                                out_by_sev_trt0 = c(0.09, 0.16),
                                sev_prob = 0.25,
                                sims = 2000,
-                               popsize = 5000){
+                               popsize = 5000,
+                               index_weeks = 3,
+                               followup = 3){
+
+  weeks <- index_weeks + followup - 1
 
   # Treatment effect
   out_by_sev_trt1 <- out_by_sev_trt0*effect
@@ -18,8 +22,8 @@ create_sim_samples <- function(scen,
           out_by_sev_trt0 = out_by_sev_trt0,
           out_by_sev_trt1 = out_by_sev_trt1,
           sev_prob = sev_prob,
-          index_weeks = 3,
-          weeks = 5)$root
+          index_weeks = index_weeks,
+          weeks = weeks)$root
 
   trt_by_sev <- c(trt_low, 2*trt_low)
 
@@ -33,7 +37,7 @@ create_sim_samples <- function(scen,
                    out_by_sev_trt1 = out_by_sev_trt1, # Outcome probability by severity under treatment
                    sev_prob = sev_prob, # Probability of severity progression at each visit
                    index_weeks = 1, # Number of visits that contribute indices
-                   weeks = 3) |>
+                   weeks = followup) |>
         dplyr::summarize(!!paste0("risk", lvl) := sum(as.numeric(!is.na(ytime))*prob)/sum(prob))
     }
   ) |>
@@ -51,7 +55,7 @@ create_sim_samples <- function(scen,
                          sev_prob = sev_prob, # Probability of severity progression at each visit
                          index_weeks = 1, # Number of visits that contribute indices
                          weeks = 3) |>
-    convert_to_long(weeks = 3, index_weeks = 1) |>
+    convert_to_long(weeks = weeks, index_weeks = 1) |>
     dplyr::filter(visit == 1)
 
   ## Setting up SNT.
@@ -61,16 +65,16 @@ create_sim_samples <- function(scen,
                       out_by_sev_trt0 = out_by_sev_trt0, # Outcome probability by severity for under no treatment
                       out_by_sev_trt1 = out_by_sev_trt1, # Outcome probability by severity under treatment
                       sev_prob = sev_prob, # Probability of severity progression at each visit
-                      index_weeks = 3, # Number of visits that contribute indices
-                      weeks = 5) # Full number of visits
+                      index_weeks = index_weeks, # Number of visits that contribute indices
+                      weeks = weeks) # Full number of visits
 
 
 
   ## convert the possible true pops to long format
-  long_snt <- convert_to_long(fup = pop, weeks = 5, index_weeks = 3) |>
-    convert_long_to_longer(pop,
+  long_snt <- convert_to_long(fup = sntpop, weeks = weeks, index_weeks = index_weeks) |>
+    convert_long_to_longer(sntpop,
                            trt_enc_sev = enc_by_sev*trt_by_sev,
-                           weeks = 5)
+                           weeks = weeks)
 
   ## sample rct IDs
   rctids <- sample(rctpop$trajid, popsize*sims, replace = T, prob = rctpop$prob)
@@ -139,8 +143,8 @@ scen_trt_prob <- function(plow,
                out_by_sev_trt0 = out_by_sev_trt0, # Outcome probability by severity for under no treatment
                out_by_sev_trt1 = out_by_sev_trt1, # Outcome probability by severity under treatment
                sev_prob = sev_prob, # Probability of severity progression at each visit
-               index_weeks = 3, # Number of visits that contribute indices
-               weeks = 5) |>
+               index_weeks = index_weeks, # Number of visits that contribute indices
+               weeks = weeks) |>
     dplyr::mutate(trt = pmax(trt1, trt2, trt3, na.rm = T)) |>
     dplyr::summarize(
       p = sum(trt*prob)/sum(prob)

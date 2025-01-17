@@ -111,12 +111,17 @@ make_truepop <- function(trt_by_sev, # Treatment probability by severity
 
 convert_to_long <- function(fup, weeks = 5, index_weeks = 3){
 
+  tau <- weeks - index_weeks
+
+  fup$trttime <- purrr::pmap_dbl(
+    dplyr::select(fup, paste0("trt", 1:index_weeks)),
+    .f = function(...){
+      which(c(...)==1)[1]
+    }
+  )
+
   fup %>%
-    dplyr::mutate(trttime = dplyr::case_when(
-      trt1 == 1 ~ 1,
-      trt2 == 1 ~ 2,
-      trt3 == 1 ~ 3,
-      TRUE ~ NA_integer_),
+    dplyr::mutate(
       anyy = !is.na(ytime)) |>
     dplyr::select(c("trajid", paste0("sev",1:weeks), paste0("enc",1:weeks),
                     paste0("trt", 1:weeks), trttime, paste0("y", 1:weeks), anyy, ytime), prob) |>
@@ -136,7 +141,7 @@ convert_to_long <- function(fup, weeks = 5, index_weeks = 3){
                   is.na(trttime)|visit <= trttime) |>
     dplyr::mutate(
       trtcens = if_else(trt == 0, trttime, NA_real_) - 1,
-      admincens = visit + 2,
+      admincens = visit + tau,
       eventtime = pmin(trtcens, admincens, ytime, na.rm = T),
       delta = dplyr::case_when(
         is.na(ytime) ~ 0,
@@ -166,7 +171,7 @@ convert_long_to_longer <- function(h, fup, trt_enc_sev, weeks = 5, index_weeks =
   h$final_t <- h$t
   survSplit(Surv(t, delta) ~ ., # splits each time to event into one row per interval of length 1
             data = h,
-            cut = 1:2, # each index contributes 3 time points
+            cut = 1:(weeks - index_weeks), # each index contributes fup time points
             start = "t_in", # time "in" (open on left)
             end = "t_out", # time out (closed on right)
             id = "index",
