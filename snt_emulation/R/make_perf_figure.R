@@ -11,6 +11,7 @@ make_perf_figure <- function(scen){
           analyze = "spt",
           target = "spt",
           pop = nm,
+          bias = bias,
           lntruth = truth,
           truth = exp(truth),
           lnrr = expval,
@@ -33,6 +34,7 @@ make_perf_figure <- function(scen){
               pop = lbl,
               lntruth = truth,
               truth = exp(truth),
+              bias = bias,
               lnrr = expval,
               rr = exp(expval)
             )

@@ -55,7 +55,7 @@ create_sim_samples <- function(scen,
                          sev_prob = sev_prob, # Probability of severity progression at each visit
                          index_weeks = 1, # Number of visits that contribute indices
                          weeks = 3) |>
-    convert_to_long(weeks = weeks, index_weeks = 1) |>
+    convert_to_long(weeks = 3, index_weeks = 1) |>
     dplyr::filter(visit == 1)
 
   ## Setting up SNT.
@@ -91,11 +91,12 @@ create_sim_samples <- function(scen,
       c(sev1s, sev0s)
     }) |> unlist()
 
+  split(1:10, as.factor(c(1, 2, 3, 4, 5)))
   ## Number of simulations per partition
   simsize <- min(100,sims)
 
-  rctsplit <- split(rctids, gl(sims/simsize, simsize)) # RCT ids
-  sntsplit <- split(sntids, gl(sims/simsize, simsize)) # SNT ids
+  rctsplit <- split(rctids, gl(sims/simsize, popsize*simsize)) # RCT ids
+  sntsplit <- split(sntids, gl(sims/simsize, popsize*simsize)) # SNT ids
 
   purrr::pwalk(
     list(rctsplit, sntsplit, 1:length(rctsplit)),

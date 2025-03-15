@@ -1,4 +1,4 @@
-make_perf_table <- function(scen){
+make_perf_tabler <- function(scen){
   effects <- readRDS(paste0(dataloc, "performance/scenario", scen, ".rds"))
 
   spt <- effects$spt_res |>

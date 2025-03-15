@@ -11,13 +11,13 @@ library(dplyr, warn.conflicts = FALSE)
 options(dplyr.summarise.inform = FALSE)
 library(gt)
 library(ggplot2)
-sims <- 2000
+sims <- 5000
 rfiles <- "R/"
 dataloc <- "data/"
 resloc <- "results/"
 
 purrr::walk(
-  list.files(path = rfiles, recursive = F, full.names = T, pattern = "*.R"),
+  list.files(path = rfiles, recursive = F, full.names = T, pattern = "table|figure"),
   source
   )
 
@@ -57,12 +57,12 @@ ind_tbl
 ```
 
 ## Performance table
+
 ```{r}
-purrr::walk(1:4,performance)
 
 purrr::map_dfr(1:4,make_perf_table) |>
   dplyr::mutate(
-    across(matches("bias|ese|rmse"), ~formatC(.x, digits = 3, format = "f"))
+    across(matches("bias|ese|rmse"), ~formatC(.x, digits = 2, format = "f"))
   ) |>
   dplyr::select(matches("^(?!.*mcse).*", perl = T)) |> 
   gt() -> perf
@@ -72,7 +72,7 @@ perf |>
 
 purrr::map_dfr(1:4,make_perf_table) |>
   dplyr::mutate(
-    across(matches("bias|ese|rmse"), ~formatC(.x, digits = 4, format = "f"))
+    across(matches("bias|ese|rmse"), ~formatC(.x, digits = 2, format = "f"))
   ) |>
   dplyr::select(scenario, analyze, target, contains("mcse")) |> 
   gt() |>
@@ -82,6 +82,7 @@ perf
 ```
 
 ## Performance figure ATE
+
 ```{r, warning=FALSE}
 
 fig <- purrr::map_dfr(1:4,make_perf_figure) |> 
@@ -100,11 +101,11 @@ fig <- purrr::map_dfr(1:4,make_perf_figure) |>
                       labels = paste0("Scenario ", 1:4))
   )
 
-ggplot(fig, mapping = aes(x = analyze, y = rr, group = shape_lbl, shape = shape_lbl)) +
-  geom_hline(aes(yintercept = truth), linetype = "dashed", color = "red", size = 1) +
+ggplot(fig, mapping = aes(x = analyze, y =lnrr, group = shape_lbl, shape = shape_lbl)) +
+  geom_hline(aes(yintercept = lntruth), linetype = "dashed", color = "red", size = 1) +
   geom_point(size = 3, position = position_dodge(width = 0.5)) +
-  scale_y_continuous(limits = c(0.5, 0.75), breaks = seq(0.5, 0.75, by = 0.05)) +
-  labs(x = "Analyzed population", y = "Risk ratio", shape = "Target population") +
+  scale_y_continuous(limits = c(-0.75, -0.25), breaks = seq(-0.75, -0.25, by = 0.05)) +
+  labs(x = "Analyzed population", y = "log risk ratio", shape = "Target population") +
   theme_classic() +
   facet_wrap(~scenario, axes = "all_x") +
   theme(
@@ -118,9 +119,29 @@ ggplot(fig, mapping = aes(x = analyze, y = rr, group = shape_lbl, shape = shape_
 
 ggsave(filename = "performance.png", path = paste0(resloc, "figures"), units = "in", width = 6, height = 5)
 
+
+ggplot(fig, mapping = aes(x = analyze, y = bias, group = shape_lbl, shape = shape_lbl)) +
+  geom_hline(aes(yintercept = 0), linetype = "dashed", color = "red", size = 1) +
+  geom_point(size = 3, position = position_dodge(width = 0.5)) +
+  scale_y_continuous(limits = c(-0.05, 0.25), breaks = seq(0, 0.25, by = 0.05)) +
+  labs(x = "Analyzed population", y = "Bias", shape = "Target population") +
+  theme_classic() +
+  facet_wrap(~scenario, axes = "all_x") +
+  theme(
+    text = element_text(size = 10),           # Base font size for all text
+    axis.title = element_text(size = 12),     # Font size for axis titles
+    axis.text = element_text(size = 10),      # Font size for axis tick labels
+    legend.title = element_text(size = 12),   # Font size for legend titles
+    legend.text = element_text(size = 10),     # Font size for legend labels
+    legend.position = "bottom"
+  )
+
+ggsave(filename = "performance_bias.png", path = paste0(resloc, "figures"), units = "in", width = 6, height = 5)
+
 ```
 
 ## Performance figure ATT
+
 ```{r, warning=FALSE}
 
 fig <- purrr::map_dfr(1:4,make_perf_figure) |> 
@@ -139,11 +160,11 @@ fig <- purrr::map_dfr(1:4,make_perf_figure) |>
                       labels = paste0("Scenario ", 1:4))
   )
 
-ggplot(fig, mapping = aes(x = analyze, y = rr, group = shape_lbl, shape = shape_lbl)) +
-  geom_hline(aes(yintercept = truth), linetype = "dashed", color = "red", size = 1) +
+ggplot(fig, mapping = aes(x = analyze, y = lnrr, group = shape_lbl, shape = shape_lbl)) +
+  geom_hline(aes(yintercept = lntruth), linetype = "dashed", color = "red", size = 1) +
   geom_point(size = 3, position = position_dodge(width = 0.5)) +
-  scale_y_continuous(limits = c(0.5, 0.75), breaks = seq(0.5, 0.75, by = 0.05)) +
-  labs(x = "Analyzed population", y = "Risk ratio", shape = "Target population") +
+  scale_y_continuous(limits = c(-0.75, -0.25), breaks = seq(-0.75, -0.25, by = 0.05)) +
+  labs(x = "Analyzed population", y = "log risk ratio", shape = "Target population") +
   theme_classic() +
   facet_wrap(~scenario, axes = "all_x") +
   theme(
@@ -156,5 +177,23 @@ ggplot(fig, mapping = aes(x = analyze, y = rr, group = shape_lbl, shape = shape_
   )
 
 ggsave(filename = "performance_att.png", path = paste0(resloc, "figures"), units = "in", width = 6, height = 5)
+
+ggplot(fig, mapping = aes(x = analyze, y = bias, group = shape_lbl, shape = shape_lbl)) +
+  geom_hline(aes(yintercept = 0), linetype = "dashed", color = "red", size = 1) +
+  geom_point(size = 3, position = position_dodge(width = 0.5)) +
+  scale_y_continuous(limits = c(-0.05, 0.25), breaks = seq(0, 0.25, by = 0.05)) +
+  labs(x = "Analyzed population", y = "Bias", shape = "Target population") +
+  theme_classic() +
+  facet_wrap(~scenario, axes = "all_x") +
+  theme(
+    text = element_text(size = 10),           # Base font size for all text
+    axis.title = element_text(size = 12),     # Font size for axis titles
+    axis.text = element_text(size = 10),      # Font size for axis tick labels
+    legend.title = element_text(size = 12),   # Font size for legend titles
+    legend.text = element_text(size = 10),     # Font size for legend labels
+    legend.position = "bottom"
+  )
+
+ggsave(filename = "performance_bias_att.png", path = paste0(resloc, "figures"), units = "in", width = 6, height = 5)
 
 ```

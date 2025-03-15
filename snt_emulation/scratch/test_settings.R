@@ -1,5 +1,5 @@
 
-rfiles <- "snt_emulation/R/"
+rfiles <- "R/"
 source(paste0(rfiles, "truepop.R"))
 ## Same for all scenarios
 weeks <- 5 # for follow-up, three weeks for contributing indices
