@@ -26,7 +26,7 @@ purrr::walk(
 ```{r, echo = F}
 
 ## Index table
-indices <- purrr::map(1:4, make_index_table, sims = 2000)
+indices <- purrr::map(1:4, make_index_table, sims = 5000)
 
 ind_tbl <- indices |>
   purrr::imap_dfr(
@@ -51,7 +51,7 @@ ind_tbl <- indices |>
   gt() 
 
 ind_tbl |> 
-  gtsave("results/index_table.rtf")
+  gtsave("results/tables/index_table.rtf")
 
 ind_tbl
 ```
@@ -68,7 +68,7 @@ purrr::map_dfr(1:4,make_perf_table) |>
   gt() -> perf
 
 perf |>
-  gtsave("results/performance_table.rtf")
+  gtsave("results/tables/performance_table.rtf")
 
 purrr::map_dfr(1:4,make_perf_table) |>
   dplyr::mutate(
@@ -76,7 +76,7 @@ purrr::map_dfr(1:4,make_perf_table) |>
   ) |>
   dplyr::select(scenario, analyze, target, contains("mcse")) |> 
   gt() |>
-  gtsave("results/performance_table_mcse.rtf")
+  gtsave("results/tables/performance_table_mcse.rtf")
 
 perf
 ```
@@ -136,7 +136,7 @@ ggplot(fig, mapping = aes(x = analyze, y = bias, group = shape_lbl, shape = shap
     legend.position = "bottom"
   )
 
-ggsave(filename = "performance_bias.png", path = paste0(resloc, "figures"), units = "in", width = 6, height = 5)
+ggsave(filename = "performance_bias_test.png", path = paste0(resloc, "figures"), units = "in", width = 6, height = 5)
 
 ```
 
@@ -194,6 +194,6 @@ ggplot(fig, mapping = aes(x = analyze, y = bias, group = shape_lbl, shape = shap
     legend.position = "bottom"
   )
 
-ggsave(filename = "performance_bias_att.png", path = paste0(resloc, "figures"), units = "in", width = 6, height = 5)
+ggsave(filename = "performance_bias_att_test.png", path = paste0(resloc, "figures"), units = "in", width = 6, height = 5)
 
 ```

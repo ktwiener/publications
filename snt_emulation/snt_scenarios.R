@@ -2,8 +2,9 @@
 
 library(dplyr)
 library(survival)
-#setwd("snt_emulation")
+setwd("snt_emulation")
 dataloc <- "data/"
+rfiles <- "R/"
 
 # purrr::walk(
 #   list.files(path = rfiles, recursive = F, full.names = T, pattern = "*.R"),
@@ -27,10 +28,10 @@ hetg_effect <- c(0.3, 0.75)
 set.seed(24601) # RNG
 
 ## Scenario 0: null treatment effect, no confounding,
-# create_sim_samples(scen = 0,
-#                    effect = 1,
-#                    enc_by_sev = enc_by_sev_nomod,
-#                    sims = sims)
+ # create_sim_samples(scen = 0,
+ #                    effect = 1,
+ #                    enc_by_sev = enc_by_sev_nomod,
+ #                    sims = sims)
 
 ## Scenario 1: no modification, severity does not influence encounters
 create_sim_samples(scen = 1,
@@ -62,4 +63,10 @@ purrr::walk(
   1:4,
   estimate_effects,
   sims = sims
+)
+
+## Performance
+purrr::walk(
+  1:4,
+  performance
 )
