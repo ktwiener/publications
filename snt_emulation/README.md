@@ -3,12 +3,17 @@
 #### Need following folders:
 
 data/
+
 data/effects
+
 data/performance
+
 data/samples
 
 results/
+
 results/figures
+
 results/tables
 
 #### Files to run:
