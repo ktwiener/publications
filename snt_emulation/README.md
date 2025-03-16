@@ -1,27 +1,27 @@
 ## SNT Emulation
 
-#### Need following folders:
+### Need following folders:
 
-data/
+- data/
 
-data/effects
+   - data/effects
 
-data/performance
+   - data/performance
 
-data/samples
+   - data/samples
 
-results/
+- results/
 
-results/figures
+   - results/figures
 
-results/tables
+   - results/tables
 
-#### Files to run:
+### Files to run:
 
 1. snt_scenarios.R
 
-  - Runs the simulations, estimates effects, estimates performance measures
+     - Runs the simulations, estimates effects, estimates performance measures
   
 2. snt_results.qmd
 
-  - Creates tables and figures for the papers. 
+     - Creates tables and figures for the papers. 
